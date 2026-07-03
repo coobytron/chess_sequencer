@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Sequencer</title>
+  <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+  <style>
+    :root {
+      --font:   -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Helvetica, Arial, sans-serif;
+      --bg:     #f6f4ef;
+      --ink:    #111111;
+      --muted:  #6e6a64;
+      --panel:  rgba(255,255,255,.74);
+      --line:   rgba(0,0,0,.12);
+      --accent: #ff4f1f;
+      --blue:   #0a84ff;
+      --shadow: 0 18px 60px rgba(0,0,0,.12);
+      --check:  #cc3333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── TOOLBAR ── */
+    .toolbar {
+      height: 44px;
+      min-height: 44px;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 14px;
+    }
+    .toolbar h1 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .toolbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button {
+      height: 28px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.74);
+      color: var(--ink);
+      cursor: pointer;
+      font: 650 12px/1 var(--font);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    button:hover { transform: translateY(-1px); background: #fff; }
+    button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    #playBtn { color: var(--accent); border-color: var(--accent); }
+    #playBtn.active { color: #fff; border-color: var(--accent); }
+
+    .bpm-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 28px;
+      padding: 0 12px;
+      background: rgba(255,255,255,.74);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+    .bpm-label {
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 72px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--line);
+      outline: none;
+      accent-color: var(--ink);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--ink);
+      cursor: pointer;
+    }
+    #bpmValue {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      min-width: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .toolbar-sep {
+      width: 1px;
+      height: 22px;
+      background: var(--line);
+      margin: 0 2px;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .app-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── LEFT PANEL ── */
+    .side-panel {
+      width: 168px;
+      min-width: 168px;
+      margin: 12px 0 12px 12px;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-section { border-bottom: 1px solid var(--line); }
+    .panel-section h3 {
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      padding: 8px 12px 6px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .music-info { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
+    .info-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .info-key { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .info-val { font-size: 12px; font-weight: 700; color: var(--ink); }
+    .tension-wrap { margin-top: 3px; }
+    .tension-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 5px; }
+    .tension-bar { height: 3px; border-radius: 2px; background: var(--line); }
+    .tension-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.5s ease; }
+
+    .captured-section { padding: 6px 12px; min-height: 24px; font-size: 15px; line-height: 1.7; color: var(--ink); }
+    .captured-section + .captured-section { border-top: 1px solid var(--line); }
+
+    .move-list {
+      font-size: 11px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .move-list::-webkit-scrollbar { width: 4px; }
+    .move-list::-webkit-scrollbar-track { background: transparent; }
+    .move-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+    .move-pair { display: grid; grid-template-columns: 20px 1fr 1fr; padding: 1px 10px; }
+    .move-pair .num { color: var(--muted); }
+    .move-pair .mv { color: var(--ink); padding: 0 3px; }
+    .move-pair .mv.latest { color: var(--accent); font-weight: 700; }
+
+    /* ── BOARD AREA ── */
+    .board-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px;
+    }
+    canvas#board {
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+    .status-bar {
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .status-bar.playing { color: var(--ink); }
+    .status-bar.check { border-color: var(--check); color: var(--check); }
+    .status-bar.checkmate { border-color: var(--check); color: var(--check); }
+    .status-bar.stalemate { border-color: var(--blue); color: var(--blue); }
+
+    /* ── SAVED GAMES STRIP ── */
+    .saved-section {
+      border-top: 1px solid var(--line);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .saved-section::-webkit-scrollbar { height: 0; }
+    .saved-label {
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .saved-list { display: flex; gap: 8px; align-items: center; }
+    .game-card {
+      background: rgba(255,255,255,.74);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 11px;
+      color: var(--ink);
+      cursor: pointer;
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      white-space: nowrap;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .game-card:hover { border-color: var(--accent); transform: translateY(-1px); background: #fff; }
+    .game-card .gc-date { color: var(--muted); }
+    .game-card .gc-moves { font-weight: 700; color: var(--ink); }
+    .game-card .gc-result { color: var(--accent); font-weight: 700; }
+    .no-games { font-size: 11px; color: var(--muted); }
+
+    /* ── PROMO MODAL ── */
+    #promoModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(17,17,17,0.35);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #promoModal.show { display: flex; }
+    .promo-box {
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      text-align: center;
+    }
+    .promo-box h3 {
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .promo-choices { display: flex; gap: 8px; justify-content: center; }
+    .promo-btn {
+      width: 52px; height: 52px;
+      font-size: 32px;
+      color: var(--ink);
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 14px;
+      background: rgba(255,255,255,.74);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .promo-btn:hover { border-color: var(--accent); transform: translateY(-1px); background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Chess Sequencer</h1>
+    <div class="toolbar-sep"></div>
+    <button id="playBtn">▶ Play</button>
+    <div class="bpm-group">
+      <span class="bpm-label">BPM</span>
+      <input id="bpmSlider" type="range" min="30" max="120" value="52">
+      <span id="bpmValue">52</span>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-right">
+      <button id="newGameBtn">New Game</button>
+      <button id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="side-panel">
+      <div class="panel-section">
+        <h3>Music</h3>
+        <div class="music-info">
+          <div class="info-row">
+            <span class="info-key">Phase</span>
+            <span class="info-val" id="phaseLabel">Opening</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Scale</span>
+            <span class="info-val" id="scaleLabel">Pentatonic</span>
+          </div>
+          <div class="tension-wrap">
+            <div class="tension-label">Tension</div>
+            <div class="tension-bar"><div class="tension-fill" id="tensionFill" style="width:4%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>Captured</h3>
+        <div class="captured-section" id="capByWhite"></div>
+        <div class="captured-section" id="capByBlack"></div>
+      </div>
+      <div class="panel-section" style="flex:1;display:flex;flex-direction:column;border-bottom:none">
+        <h3>Moves</h3>
+        <div class="move-list" id="moveList"></div>
+      </div>
+    </div>
+
+    <div class="board-area">
+      <canvas id="board" width="480" height="480"></canvas>
+      <div class="status-bar playing" id="statusBar">White to move</div>
+    </div>
+  </div>
+
+  <div class="saved-section">
+    <span class="saved-label">Saved</span>
+    <div class="saved-list" id="savedList">
+      <span class="no-games">No games yet</span>
+    </div>
+  </div>
+
+  <div id="promoModal">
+    <div class="promo-box">
+      <h3>Promote Pawn</h3>
+      <div class="promo-choices" id="promoChoices"></div>
+    </div>
+  </div>
+
+  <script>
+  // ═══════════════════════════════════════════════
+  // CHESS ENGINE
+  // ═══════════════════════════════════════════════
+
+  const WHITE_SYMS = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙' };
+  const BLACK_SYMS = { K:'♚', Q:'♛', R:'♜', B:'♝', N:'♞', P:'♟' };
+  const PIECE_VAL  = { P:1, N:3, B:3, R:5, Q:9, K:0 };
+
+  function mkPiece(color, type) { return { color, type }; }
+  function opp(c) { return c === 'w' ? 'b' : 'w'; }
+  function onBoard(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+  function initBoard() {
+    const b = Array.from({length:8}, () => Array(8).fill(null));
+    const back = ['R','N','B','Q','K','B','N','R'];
+    for (let c = 0; c < 8; c++) {
+      b[0][c] = mkPiece('b', back[c]);
+      b[1][c] = mkPiece('b', 'P');
+      b[6][c] = mkPiece('w', 'P');
+      b[7][c] = mkPiece('w', back[c]);
+    }
+    return b;
+  }
+
+  function cloneBoard(b) {
+    return b.map(row => row.map(p => p ? {...p} : null));
+  }
+
+  // Returns pseudo-legal moves (ignores check)
+  function pseudoMoves(board, gs, r, c) {
+    const piece = board[r][c];
+    if (!piece) return [];
+    const { color, type } = piece;
+    const enemy = opp(color);
+    const moves = [];
+
+    function push(tr, tc, special, cap) {
+      moves.push({ from:{row:r,col:c}, to:{row:tr,col:tc}, piece, captured: cap !== undefined ? cap : board[tr][tc], special: special || null });
+    }
+
+    function slide(dr, dc) {
+      let nr = r+dr, nc = c+dc;
+      while (onBoard(nr, nc)) {
+        if (board[nr][nc]) {
+          if (board[nr][nc].color === enemy) push(nr, nc);
+          break;
+        }
+        push(nr, nc);
+        nr += dr; nc += dc;
+      }
+    }
+
+    if (type === 'P') {
+      const dir = color === 'w' ? -1 : 1;
+      const startRow = color === 'w' ? 6 : 1;
+      const promoRow = color === 'w' ? 0 : 7;
+      // Forward
+      if (onBoard(r+dir, c) && !board[r+dir][c]) {
+        push(r+dir, c, r+dir === promoRow ? 'promo' : null);
+        if (r === startRow && !board[r+2*dir][c])
+          push(r+2*dir, c, 'double');
+      }
+      // Diagonal captures
+      for (const dc of [-1, 1]) {
+        if (!onBoard(r+dir, c+dc)) continue;
+        if (board[r+dir][c+dc]?.color === enemy)
+          push(r+dir, c+dc, r+dir === promoRow ? 'promo' : null);
+        if (gs.ep && gs.ep.row === r+dir && gs.ep.col === c+dc)
+          push(r+dir, c+dc, 'ep', mkPiece(enemy, 'P'));
+      }
+    } else if (type === 'N') {
+      for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+        const nr = r+dr, nc = c+dc;
+        if (onBoard(nr, nc) && board[nr][nc]?.color !== color) push(nr, nc);
+      }
+    } else if (type === 'B') {
+      [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,dc]) => slide(dr,dc));
+    } else if (type === 'R') {
+      [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc]) => slide(dr,dc));
+    } else if (type === 'Q') {
+      [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc]) => slide(dr,dc));
+    } else if (type === 'K') {
+      for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+        const nr = r+dr, nc = c+dc;
+        if (onBoard(nr, nc) && board[nr][nc]?.color !== color) push(nr, nc);
+      }
+      // Castling (use dummyGs to avoid recursion in isAttacked)
+      const cr = color === 'w' ? 7 : 0;
+      if (r === cr && c === 4) {
+        const wK = gs.castle?.wK, wQ = gs.castle?.wQ, bK = gs.castle?.bK, bQ = gs.castle?.bQ;
+        if ((color==='w' ? wK : bK) && !board[cr][5] && !board[cr][6] && board[cr][7]?.type==='R' && board[cr][7]?.color===color) {
+          if (!isAttacked(board,cr,4,enemy) && !isAttacked(board,cr,5,enemy) && !isAttacked(board,cr,6,enemy))
+            moves.push({ from:{row:r,col:c}, to:{row:cr,col:6}, piece, captured:null, special:'castle-k' });
+        }
+        if ((color==='w' ? wQ : bQ) && !board[cr][3] && !board[cr][2] && !board[cr][1] && board[cr][0]?.type==='R' && board[cr][0]?.color===color) {
+          if (!isAttacked(board,cr,4,enemy) && !isAttacked(board,cr,3,enemy) && !isAttacked(board,cr,2,enemy))
+            moves.push({ from:{row:r,col:c}, to:{row:cr,col:2}, piece, captured:null, special:'castle-q' });
+        }
+      }
+    }
+    return moves;
+  }
+
+  // Check if square (r,c) is attacked by 'byColor'
+  function isAttacked(board, r, c, byColor) {
+    const dgs = { ep: null, castle: { wK:false, wQ:false, bK:false, bQ:false } };
+    for (let tr = 0; tr < 8; tr++) {
+      for (let tc = 0; tc < 8; tc++) {
+        const p = board[tr][tc];
+        if (!p || p.color !== byColor) continue;
+        if (p.type === 'P') {
+          const pd = p.color === 'w' ? -1 : 1;
+          if (tr+pd === r && (tc-1 === c || tc+1 === c)) return true;
+        } else {
+          if (pseudoMoves(board, dgs, tr, tc).some(m => m.to.row===r && m.to.col===c)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function inCheck(board, color) {
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 8; c++)
+        if (board[r][c]?.type === 'K' && board[r][c]?.color === color)
+          return isAttacked(board, r, c, opp(color));
+    return false;
+  }
+
+  function applyMove(board, move, promoPiece) {
+    const nb = cloneBoard(board);
+    const { from, to, piece, special } = move;
+    nb[to.row][to.col] = { ...piece };
+    nb[from.row][from.col] = null;
+    if (special === 'ep') nb[from.row][to.col] = null;
+    if (special === 'castle-k') { nb[to.row][5] = nb[to.row][7]; nb[to.row][7] = null; }
+    if (special === 'castle-q') { nb[to.row][3] = nb[to.row][0]; nb[to.row][0] = null; }
+    if (special === 'promo') nb[to.row][to.col] = mkPiece(piece.color, promoPiece || 'Q');
+    return nb;
+  }
+
+  function legalMoves(board, gs, r, c) {
+    const p = board[r][c];
+    if (!p) return [];
+    return pseudoMoves(board, gs, r, c).filter(m => {
+      const nb = applyMove(board, m, 'Q');
+      return !inCheck(nb, p.color);
+    });
+  }
+
+  function allLegalMoves(board, gs, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 8; c++)
+        if (board[r][c]?.color === color)
+          out.push(...legalMoves(board, gs, r, c));
+    return out;
+  }
+
+  // Algebraic notation
+  function toAlg(board, move, allMoves, checkStatus) {
+    const { from, to, piece, captured, special } = move;
+    if (special === 'castle-k') return 'O-O' + (checkStatus === 'checkmate' ? '#' : checkStatus === 'check' ? '+' : '');
+    if (special === 'castle-q') return 'O-O-O' + (checkStatus === 'checkmate' ? '#' : checkStatus === 'check' ? '+' : '');
+    const files = 'abcdefgh';
+    const ranks = '87654321';
+    let s = '';
+    if (piece.type !== 'P') {
+      s += piece.type;
+      const ambig = allMoves.filter(m =>
+        m.piece.type === piece.type && m.piece.color === piece.color &&
+        m.to.row === to.row && m.to.col === to.col &&
+        !(m.from.row === from.row && m.from.col === from.col)
+      );
+      if (ambig.length > 0) {
+        const sf = ambig.some(m => m.from.col === from.col);
+        const sr = ambig.some(m => m.from.row === from.row);
+        if (sf && sr) s += files[from.col] + ranks[from.row];
+        else if (sf) s += ranks[from.row];
+        else s += files[from.col];
+      }
+    }
+    if (captured) { if (piece.type === 'P') s += files[from.col]; s += 'x'; }
+    s += files[to.col] + ranks[to.row];
+    if (special === 'promo') s += '=' + (move.promoPiece || 'Q');
+    if (checkStatus === 'checkmate') s += '#';
+    else if (checkStatus === 'check') s += '+';
+    return s;
+  }
+
+  // ═══════════════════════════════════════════════
+  // GAME STATE
+  // ═══════════════════════════════════════════════
+
+  let GS = null; // game state
+  let pendingPromo = null; // { move, resolve }
+
+  function newGame() {
+    GS = {
+      board: initBoard(),
+      turn: 'w',
+      ep: null,
+      castle: { wK:true, wQ:true, bK:true, bQ:true },
+      history: [],       // { move, alg, board }
+      capW: [],          // captured by white
+      capB: [],          // captured by black
+      status: 'playing', // playing | check | checkmate | stalemate
+      selected: null,
+      highlights: []
+    };
+    refreshStatus();
+    renderMoveList();
+    renderCaptured();
+    renderStatusBar();
+    updateMusicState();
+  }
+
+  function refreshStatus() {
+    if (!GS) return;
+    const { board, turn } = GS;
+    const checked = inCheck(board, turn);
+    const moves = allLegalMoves(board, GS, turn);
+    if (moves.length === 0) GS.status = checked ? 'checkmate' : 'stalemate';
+    else GS.status = checked ? 'check' : 'playing';
+  }
+
+  function updateCastle(move) {
+    const { from, to, piece } = move;
+    const cs = GS.castle;
+    if (piece.type === 'K') { if (piece.color==='w') { cs.wK=false; cs.wQ=false; } else { cs.bK=false; cs.bQ=false; } }
+    if (piece.type === 'R') {
+      if (from.row===7&&from.col===7) cs.wK=false;
+      if (from.row===7&&from.col===0) cs.wQ=false;
+      if (from.row===0&&from.col===7) cs.bK=false;
+      if (from.row===0&&from.col===0) cs.bQ=false;
+    }
+    if (to.row===7&&to.col===7) cs.wK=false;
+    if (to.row===7&&to.col===0) cs.wQ=false;
+    if (to.row===0&&to.col===7) cs.bK=false;
+    if (to.row===0&&to.col===0) cs.bQ=false;
+  }
+
+  async function executeMove(move) {
+    let promoPiece = 'Q';
+    if (move.special === 'promo') {
+      promoPiece = await askPromotion(move.piece.color);
+    }
+
+    const preBoard = GS.board;
+    const allMoves = allLegalMoves(preBoard, GS, GS.turn);
+
+    if (move.captured) {
+      if (GS.turn === 'w') GS.capW.push(move.captured);
+      else GS.capB.push(move.captured);
+    }
+
+    GS.board = applyMove(preBoard, move, promoPiece);
+
+    // Update promotion piece in move for algebraic
+    const moveRecord = { ...move };
+    if (move.special === 'promo') moveRecord.promoPiece = promoPiece;
+
+    GS.ep = move.special === 'double' ? { row: move.from.row + (move.piece.color==='w'?-1:1), col: move.to.col } : null;
+    updateCastle(move);
+    GS.turn = opp(GS.turn);
+
+    refreshStatus();
+
+    const alg = toAlg(preBoard, moveRecord, allMoves, GS.status === 'checkmate' ? 'checkmate' : GS.status === 'check' ? 'check' : null);
+    GS.history.push({ move: moveRecord, alg, board: cloneBoard(GS.board) });
+
+    GS.selected = null;
+    GS.highlights = [];
+
+    triggerMoveSound(move);
+    updateMusicState();
+    renderMoveList();
+    renderCaptured();
+    renderStatusBar();
+  }
+
+  function askPromotion(color) {
+    return new Promise(resolve => {
+      const modal = document.getElementById('promoModal');
+      const choices = document.getElementById('promoChoices');
+      const pieces = ['Q','R','B','N'];
+      const syms = color === 'w' ? WHITE_SYMS : BLACK_SYMS;
+      choices.innerHTML = pieces.map(p =>
+        `<div class="promo-btn" data-piece="${p}">${syms[p]}</div>`
+      ).join('');
+      choices.querySelectorAll('.promo-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          modal.classList.remove('show');
+          resolve(btn.dataset.piece);
+        }, { once: true });
+      });
+      modal.classList.add('show');
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // GAME STORAGE
+  // ═══════════════════════════════════════════════
+
+  const STORE_KEY = 'chess_seq_v2';
+
+  function savedGames() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch { return []; }
+  }
+
+  function saveGame() {
+    if (!GS || GS.history.length === 0) { alert('No moves to save.'); return; }
+    const games = savedGames();
+    const pgn = GS.history.reduce((s, e, i) => {
+      return s + (i % 2 === 0 ? `${Math.floor(i/2)+1}. ` : '') + e.alg + ' ';
+    }, '').trim();
+    const result = GS.status === 'checkmate' ? (opp(GS.turn)==='w' ? '1-0' : '0-1')
+      : GS.status === 'stalemate' ? '½-½' : '*';
+    games.unshift({
+      id: Date.now(),
+      date: new Date().toLocaleDateString(),
+      moves: GS.history.length,
+      result,
+      pgn,
+      history: GS.history.map(e => e.alg)
+    });
+    if (games.length > 30) games.length = 30;
+    localStorage.setItem(STORE_KEY, JSON.stringify(games));
+    renderSavedGames();
+    alert('Game saved!');
+  }
+
+  function renderSavedGames() {
+    const el = document.getElementById('savedList');
+    const games = savedGames();
+    if (!games.length) { el.innerHTML = '<span class="no-games">No saved games yet.</span>'; return; }
+    el.innerHTML = games.map(g => `
+      <div class="game-card" onclick="showGame(${g.id})">
+        <div class="gc-date">${g.date}</div>
+        <div class="gc-moves">${Math.ceil(g.moves/2)} moves</div>
+        <div class="gc-result">${g.result}</div>
+      </div>
+    `).join('');
+  }
+
+  function showGame(id) {
+    const game = savedGames().find(g => g.id === id);
+    if (!game) return;
+    alert(`PGN:\n${game.pgn}`);
+  }
+
+  // ═══════════════════════════════════════════════
+  // MUSIC SYSTEM  — ambient / drone
+  // ═══════════════════════════════════════════════
+
+  // Effects chain: pads → filter → chorus → delay → reverb → out
+  const reverb  = new Tone.Reverb({ decay: 9, wet: 0.72 }).toDestination();
+  const delay   = new Tone.FeedbackDelay({ delayTime: '8n.', feedback: 0.38, wet: 0.28 }).connect(reverb);
+  const chorus  = new Tone.Chorus({ frequency: 0.25, delayTime: 5, depth: 0.7, wet: 0.5 }).connect(delay);
+  chorus.start();
+  const filter  = new Tone.Filter({ frequency: 900, type: 'lowpass', rolloff: -24 }).connect(chorus);
+
+  // Pad synths — wide attack, long release so notes blur into drones
+  const whiteSynth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'fatsine', count: 3, spread: 22 },
+    envelope: { attack: 2.2, decay: 0, sustain: 1.0, release: 6 },
+    volume: -9
+  }).connect(filter);
+  whiteSynth.maxPolyphony = 5;
+
+  const blackSynth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'fatsawtooth', count: 2, spread: 14 },
+    envelope: { attack: 3.5, decay: 1.2, sustain: 0.65, release: 8 },
+    volume: -14
+  }).connect(filter);
+  blackSynth.maxPolyphony = 5;
+
+  // Bell/event synth — sine pluck that rings into the reverb tail
+  const eventSynth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'sine' },
+    envelope: { attack: 0.008, decay: 3.0, sustain: 0, release: 4 },
+    volume: -7
+  }).connect(reverb);
+  eventSynth.maxPolyphony = 6;
+
+  // Sub drone — continuous sine that shifts root note per phase
+  const droneGain = new Tone.Gain(0).connect(reverb);
+  const drone = new Tone.Oscillator({ type: 'sine', frequency: 'C2', volume: -18 }).connect(droneGain);
+  // Slow tremolo on drone
+  const droneTrem = new Tone.LFO({ frequency: 0.04, min: 0.2, max: 0.7 }).connect(droneGain.gain);
+
+  // Scales keyed by game phase
+  const SCALES = {
+    opening: {
+      // C major pentatonic — open, luminous
+      w: ['C4','E4','G4','A4','C5','E5','G5','A5'],
+      b: ['C3','E3','G3','A3','C4','E4','G4','A4'],
+      name: 'Pentatonic', bpm: 52, drone: 'C2', cutoff: 900
+    },
+    middle: {
+      // A Dorian — melancholic, searching
+      w: ['A3','B3','C4','E4','F#4','A4','C5','E5'],
+      b: ['A2','B2','C3','E3','F#3','A3','C4','E4'],
+      name: 'Dorian', bpm: 58, drone: 'A1', cutoff: 700
+    },
+    end: {
+      // E Phrygian — dark, inevitable
+      w: ['E4','F4','G4','A4','B4','C5','D5','E5'],
+      b: ['E2','F2','G2','A2','B2','C3','D3','E3'],
+      name: 'Phrygian', bpm: 46, drone: 'E2', cutoff: 500
+    }
+  };
+
+  const VEL_MAP = { P:0.25, N:0.4, B:0.45, R:0.55, Q:0.7, K:0.85 };
+
+  let seqStep = 0;
+  let seqPlaying = false;
+
+  const seqLoop = new Tone.Loop(time => {
+    if (!GS) return;
+    const phase = gamePhase();
+    const sc = SCALES[phase];
+    const col = seqStep;
+
+    // Best piece per color in this column (highest value)
+    let bw = null, bwR = -1, bb = null, bbR = -1;
+    for (let row = 0; row < 8; row++) {
+      const p = GS.board[row][col];
+      if (!p) continue;
+      if (p.color === 'w' && (!bw || PIECE_VAL[p.type] > PIECE_VAL[bw.type])) { bw = p; bwR = row; }
+      if (p.color === 'b' && (!bb || PIECE_VAL[p.type] > PIECE_VAL[bb.type])) { bb = p; bbR = row; }
+    }
+
+    // Half-note triggers with long envelope — notes swell and overlap into a drone texture
+    const dur = '2n';
+    if (bw) {
+      const idx = Math.min(7 - bwR, 7);
+      whiteSynth.triggerAttackRelease(sc.w[idx], dur, time, VEL_MAP[bw.type]);
+    }
+    if (bb) {
+      const idx = Math.min(7 - bbR, 7);
+      blackSynth.triggerAttackRelease(sc.b[idx], dur, time, VEL_MAP[bb.type]);
+    }
+
+    seqStep = (seqStep + 1) % 8;
+  }, '2n');
+
+  Tone.Transport.bpm.value = 52;
+  seqLoop.start(0);
+
+  function gamePhase() {
+    if (!GS) return 'opening';
+    const n = GS.history.length;
+    const pieces = GS.board.flat().filter(Boolean).length;
+    if (n < 20 && pieces > 24) return 'opening';
+    if (pieces <= 12 || n > 40) return 'end';
+    return 'middle';
+  }
+
+  function updateMusicState() {
+    if (!GS) return;
+    const phase = gamePhase();
+    const sc = SCALES[phase];
+    const n = GS.history.length;
+    const checked = GS.status === 'check' || GS.status === 'checkmate';
+    const tension = checked ? 0.92 : Math.min(0.75, n / 80 + 0.04);
+
+    Tone.Transport.bpm.rampTo(sc.bpm, 10);
+
+    // Filter darkens as game progresses and tension rises
+    filter.frequency.rampTo(Math.max(40, sc.cutoff * (1 - tension * 0.45)), 5);
+
+    // Shift drone root note
+    if (seqPlaying) drone.frequency.rampTo(Tone.Frequency(sc.drone).toFrequency(), 8);
+
+    const bpmNow = Math.round(Tone.Transport.bpm.value);
+    document.getElementById('bpmSlider').value = bpmNow;
+    document.getElementById('bpmValue').textContent = bpmNow;
+    document.getElementById('phaseLabel').textContent =
+      phase === 'opening' ? 'Opening' : phase === 'middle' ? 'Middlegame' : 'Endgame';
+    document.getElementById('scaleLabel').textContent = sc.name;
+    document.getElementById('tensionFill').style.width = (tension * 100) + '%';
+  }
+
+  function triggerMoveSound(move) {
+    const now = Tone.now() + 0.06;
+    const { special, captured } = move;
+
+    if (special === 'castle-k' || special === 'castle-q') {
+      // Slow ascending chord bloom
+      ['C3','G3','C4','E4'].forEach((n, i) =>
+        eventSynth.triggerAttackRelease(n, '1n', now + i * 0.5, 0.45));
+    } else if (special === 'promo') {
+      // Shimmering rise
+      ['C4','E4','G4','B4','E5'].forEach((n, i) =>
+        eventSynth.triggerAttackRelease(n, '1n', now + i * 0.4, 0.38));
+    } else if (GS.status === 'checkmate') {
+      // Deep resonant toll
+      ['C2','G2','C3','Eb3'].forEach((n, i) =>
+        eventSynth.triggerAttackRelease(n, '2n', now + i * 0.3, 0.6));
+    } else if (GS.status === 'check') {
+      // Dissonant tritone swell
+      eventSynth.triggerAttackRelease('F#3', '1n', now, 0.5);
+      eventSynth.triggerAttackRelease('C4',  '1n', now + 0.15, 0.4);
+    } else if (captured) {
+      // Soft low bell thud
+      eventSynth.triggerAttackRelease('C2', '4n', now, 0.5);
+    }
+    // Normal moves: silence — let the pad texture breathe
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDERING
+  // ═══════════════════════════════════════════════
+
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const CELL = 60;
+
+  const SQ_LIGHT = '#faf8f3';   // near-white warm off-white
+  const SQ_DARK  = '#d9d5cd';   // soft warm gray (harmonizes with --bg)
+  const HL_LIGHT = '#ffe6db';   // accent-tinted wash on light squares
+  const HL_DARK  = '#f0c4b3';   // accent-tinted wash on dark squares
+
+  function drawBoard() {
+    ctx.clearRect(0, 0, 480, 480);
+    if (!GS) { requestAnimationFrame(drawBoard); return; }
+
+    const { board, selected, highlights, status, turn, history } = GS;
+    const lastMove = history[history.length - 1]?.move;
+
+    // Find king pos if in check
+    let checkSq = null;
+    if (status === 'check' || status === 'checkmate') {
+      for (let r = 0; r < 8; r++)
+        for (let c = 0; c < 8; c++)
+          if (board[r][c]?.type === 'K' && board[r][c]?.color === turn)
+            checkSq = { r, c };
+    }
+
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const x = col * CELL, y = row * CELL;
+        const light = (row + col) % 2 === 0;
+
+        // Base color
+        ctx.fillStyle = light ? SQ_LIGHT : SQ_DARK;
+        ctx.fillRect(x, y, CELL, CELL);
+
+        // Last move highlight
+        if (lastMove && (
+          (lastMove.from.row===row && lastMove.from.col===col) ||
+          (lastMove.to.row===row && lastMove.to.col===col)
+        )) {
+          ctx.fillStyle = light ? HL_LIGHT : HL_DARK;
+          ctx.fillRect(x, y, CELL, CELL);
+        }
+
+        // Check radial glow
+        if (checkSq && checkSq.r === row && checkSq.c === col) {
+          const g = ctx.createRadialGradient(x+CELL/2,y+CELL/2,3,x+CELL/2,y+CELL/2,CELL*0.65);
+          g.addColorStop(0, 'rgba(220,50,50,0.85)');
+          g.addColorStop(1, 'rgba(220,50,50,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x, y, CELL, CELL);
+        }
+
+        // Selected square
+        if (selected && selected.row===row && selected.col===col) {
+          ctx.fillStyle = 'rgba(10,132,255,0.28)';
+          ctx.fillRect(x, y, CELL, CELL);
+        }
+
+        // Sequencer playhead
+        if (seqPlaying && col === seqStep) {
+          ctx.fillStyle = 'rgba(255,79,31,0.16)';
+          ctx.fillRect(x, y, CELL, CELL);
+        }
+
+        // Legal move indicators
+        const isTarget = highlights.some(h => h.row===row && h.col===col);
+        if (isTarget) {
+          if (board[row][col]) {
+            // Capture ring
+            ctx.strokeStyle = 'rgba(10,132,255,0.55)';
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.arc(x+CELL/2, y+CELL/2, CELL*0.44, 0, Math.PI*2);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = 'rgba(17,17,17,0.22)';
+            ctx.beginPath();
+            ctx.arc(x+CELL/2, y+CELL/2, CELL*0.14, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
+
+        // Draw piece
+        const p = board[row][col];
+        if (p) {
+          const sym = p.color === 'w' ? WHITE_SYMS[p.type] : BLACK_SYMS[p.type];
+          ctx.font = `${CELL*0.68}px "Segoe UI Symbol", "Apple Color Emoji", serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const cx = x + CELL/2, cy = y + CELL/2 + 1;
+          if (p.color === 'w') {
+            // White pieces: light fill with ink outline so they read on a light board
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(17,17,17,0.55)';
+            ctx.strokeText(sym, cx, cy);
+            ctx.fillStyle = '#fbfaf7';
+            ctx.fillText(sym, cx, cy);
+          } else {
+            // Black pieces: solid ink with a soft light halo for depth
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillText(sym, cx+0.5, cy+0.5);
+            ctx.fillStyle = '#111111';
+            ctx.fillText(sym, cx, cy);
+          }
+        }
+      }
+    }
+
+    // Coordinate labels inside squares — muted ink reads on both square tones
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(110,106,100,0.9)';
+    const files = 'abcdefgh';
+    const ranks = '87654321';
+    for (let i = 0; i < 8; i++) {
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText(files[i], (i+1)*CELL - 2, 480 - 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(ranks[i], 2, i*CELL + 2);
+    }
+
+    requestAnimationFrame(drawBoard);
+  }
+
+  // ═══════════════════════════════════════════════
+  // UI UPDATES
+  // ═══════════════════════════════════════════════
+
+  function renderStatusBar() {
+    if (!GS) return;
+    const el = document.getElementById('statusBar');
+    const tn = GS.turn === 'w' ? 'White' : 'Black';
+    if (GS.status === 'checkmate') {
+      el.textContent = `Checkmate — ${opp(GS.turn)==='w' ? 'White' : 'Black'} wins`;
+      el.className = 'status-bar checkmate';
+    } else if (GS.status === 'stalemate') {
+      el.textContent = 'Stalemate — Draw';
+      el.className = 'status-bar stalemate';
+    } else if (GS.status === 'check') {
+      el.textContent = `${tn} in check`;
+      el.className = 'status-bar check';
+    } else {
+      el.textContent = `${tn} to move`;
+      el.className = 'status-bar playing';
+    }
+  }
+
+  function renderMoveList() {
+    if (!GS) return;
+    const el = document.getElementById('moveList');
+    const h = GS.history;
+    let html = '';
+    for (let i = 0; i < h.length; i += 2) {
+      const num = Math.floor(i/2) + 1;
+      const wAlg = h[i]?.alg || '';
+      const bAlg = h[i+1]?.alg || '';
+      const wLatest = i === h.length - 1 ? 'latest' : '';
+      const bLatest = i+1 === h.length - 1 ? 'latest' : '';
+      html += `<div class="move-pair">
+        <span class="num">${num}.</span>
+        <span class="mv ${wLatest}">${wAlg}</span>
+        <span class="mv ${bLatest}">${bAlg}</span>
+      </div>`;
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function renderCaptured() {
+    if (!GS) return;
+    const symFor = p => (p.color === 'w' ? WHITE_SYMS : BLACK_SYMS)[p.type];
+    // Sort by value descending for tidiness
+    const sortPieces = arr => [...arr].sort((a,b) => PIECE_VAL[b.type] - PIECE_VAL[a.type]);
+    document.getElementById('capByWhite').textContent = sortPieces(GS.capW).map(symFor).join(' ');
+    document.getElementById('capByBlack').textContent = sortPieces(GS.capB).map(symFor).join(' ');
+  }
+
+  // ═══════════════════════════════════════════════
+  // EVENT HANDLERS
+  // ═══════════════════════════════════════════════
+
+  canvas.addEventListener('click', async evt => {
+    if (!GS || GS.status === 'checkmate' || GS.status === 'stalemate') return;
+    await Tone.start();
+
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const col = Math.floor((evt.clientX - rect.left) * sx / CELL);
+    const row = Math.floor((evt.clientY - rect.top) * sy / CELL);
+    if (!onBoard(row, col)) return;
+
+    const { board, turn, selected, highlights } = GS;
+    const clicked = board[row][col];
+
+    if (selected) {
+      const legal = highlights.find(h => h.row===row && h.col===col);
+      if (legal) {
+        await executeMove(legal.move);
+        return;
+      }
+      // Select different own piece or deselect
+      if (clicked?.color === turn) {
+        GS.selected = { row, col };
+        const moves = legalMoves(board, GS, row, col);
+        GS.highlights = moves.map(m => ({ row: m.to.row, col: m.to.col, move: m }));
+      } else {
+        GS.selected = null;
+        GS.highlights = [];
+      }
+    } else {
+      if (clicked?.color === turn) {
+        GS.selected = { row, col };
+        const moves = legalMoves(board, GS, row, col);
+        GS.highlights = moves.map(m => ({ row: m.to.row, col: m.to.col, move: m }));
+      }
+    }
+  });
+
+  document.getElementById('playBtn').addEventListener('click', async () => {
+    await Tone.start();
+    if (!seqPlaying) {
+      Tone.Transport.start();
+      drone.start();
+      droneTrem.start();
+      droneGain.gain.rampTo(0.6, 4);
+      seqPlaying = true;
+      document.getElementById('playBtn').textContent = '⏹ Stop';
+      document.getElementById('playBtn').classList.add('active');
+    } else {
+      Tone.Transport.stop();
+      droneGain.gain.rampTo(0, 3);
+      seqStep = 0;
+      seqPlaying = false;
+      document.getElementById('playBtn').textContent = '▶ Sequence';
+      document.getElementById('playBtn').classList.remove('active');
+    }
+  });
+
+  document.getElementById('bpmSlider').addEventListener('input', e => {
+    const bpm = Number(e.target.value);
+    Tone.Transport.bpm.value = bpm;
+    document.getElementById('bpmValue').textContent = bpm;
+  });
+
+  document.getElementById('newGameBtn').addEventListener('click', () => {
+    if (GS?.history.length > 0 && !confirm('Start new game? Unsaved progress will be lost.')) return;
+    newGame();
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', saveGame);
+
+  // ═══════════════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════════════
+
+  newGame();
+  renderSavedGames();
+  drawBoard();
+  </script>
+</body>
+</html>
