@@ -2,7 +2,7 @@
 
 Creative coding / web experiment. 
 
-""We built it with glass though"" - Ari Kaye
+"We built it with glass though" - Ari Kaye
 
 ## Run
 
