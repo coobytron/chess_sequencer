@@ -1,6 +1,9 @@
 # Chess_Sequencer
 
-Creative coding / web experiment.
+Creative coding / web experiment. 
+
+We built it with glass though
+  - Ari Kaye
 
 ## Run
 
